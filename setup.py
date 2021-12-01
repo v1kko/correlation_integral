@@ -28,7 +28,7 @@ if __name__ == "__main__":
     long_description = fh.read()
   from numpy.distutils.core import setup
   from os import environ as env
-  env['F90FLAGS']='-fopenmp'
+  env['F90FLAGS']         = "-fopenmp -lgomp"
   setup(name              = "correlation_integral",
         version           = "0.0.1",
         url               = "https://github.com/v1kko/correlation_integral",
