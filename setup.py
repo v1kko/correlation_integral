@@ -20,7 +20,8 @@ from numpy.distutils.core import Extension
 
 ext1 = Extension(name = 'correlation_integral',
                  sources = ['correlation_integral.f90'],
-                 extra_link_args = ['-lgomp'],
+                 extra_f90_compile_args = ['-fopenmp'],
+                 libraries = ['gomp'],
     )
 
 if __name__ == "__main__":
@@ -28,7 +29,6 @@ if __name__ == "__main__":
     long_description = fh.read()
   from numpy.distutils.core import setup
   from os import environ as env
-  env['F90FLAGS']         = "-fopenmp"
   setup(name              = "correlation_integral",
         version           = "0.0.1",
         url               = "https://github.com/v1kko/correlation_integral",
