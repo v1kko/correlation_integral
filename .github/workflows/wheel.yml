@@ -15,6 +15,10 @@ jobs:
 
       - uses: actions/setup-python@v2
 
+      - name: Set up Gfortran
+        if: runner.os == 'macOS'
+        run: ln -s /usr/local/bin/gfortran-10 /usr/local/bin/gfortran
+
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel==2.3.0
 
