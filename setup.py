@@ -16,7 +16,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from numpy.distutils.core import Extension
+from numpy.distutils.core import Extension, setup
+from sys import platform
+from os import environ as env
 
 ext1 = Extension(name = 'correlation_integral',
                  sources = ['correlation_integral.f90'],
@@ -27,8 +29,11 @@ ext1 = Extension(name = 'correlation_integral',
 if __name__ == "__main__":
   with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
-  from numpy.distutils.core import setup
-  from os import environ as env
+
+  #Windows numpy distutils ignores every linker flag, so we force it
+  if platform.startswith('win'):
+    env['LD_FLAGS']         = "-Xlinker --start-group -lgomp -ldl"
+
   setup(name              = "correlation_integral",
         version           = "0.0.1",
         url               = "https://github.com/v1kko/correlation_integral",
