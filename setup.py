@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
   #Windows numpy distutils ignores every linker flag, so we force it
   if platform.startswith('win'):
-    env['LDFLAGS']        = "-Xlinker --start-group -lgomp -ldl"
+    env['LDFLAGS']        = "-Xlinker --start-group -lgomp"
 
   setup(name              = "correlation_integral",
         version           = "0.0.1",
