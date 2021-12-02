@@ -31,8 +31,7 @@ if __name__ == "__main__":
     long_description = fh.read()
 
   #Windows numpy distutils ignores every linker flag, so we force it
-  if platform.startswith('win'):
-    env['LD_FLAGS']         = "-Xlinker --start-group -lgomp -ldl"
+  env['LD_FLAGS']         = "-Xlinker --start-group -lgomp -ldl"
 
   setup(name              = "correlation_integral",
         version           = "0.0.1",
