@@ -23,7 +23,7 @@ from os import environ as env
 ext1 = Extension(name = 'correlation_integral',
                  sources = ['correlation_integral.f90'],
                  extra_f90_compile_args = ['-fopenmp'],
-                 libraries = ['gomp'],
+                 libraries = [] if platform.startswith('win') else ['gomp'],
     )
 
 if __name__ == "__main__":
