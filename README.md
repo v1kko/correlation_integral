@@ -49,3 +49,4 @@ Example + Usage
     plt.plot(rs,Cds[:,i])
   plt.xscale("log")
   plt.yscale("log")
+  plt.show()

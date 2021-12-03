@@ -26,6 +26,18 @@ jobs:
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
 
+      - name: On windows fix wheels
+        if: runner.os == 'Windows'
+        run: |
+          cd ./wheelhouse
+          for whl in *.whl; do
+            wheel unpack $whl --dest unpacked
+            mv unpacked/*/correlation_integral/.libs/* unpacked/*/
+            wheel pack unpacked/*
+            rm -rf unpacked
+          done
+          cd ../
+
       - uses: actions/upload-artifact@v2
         with:
           path: ./wheelhouse/*.whl
