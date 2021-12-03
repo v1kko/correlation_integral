@@ -47,5 +47,6 @@ if __name__ == "__main__":
                             "Operating System :: OS Independent",
                             ],
         python_requires   = ">=3.6",
+        install_requires  = ["numpy>=1.18.0"],
         ext_modules       = [ext1],
         )
