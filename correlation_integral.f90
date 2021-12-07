@@ -70,7 +70,7 @@ real(real32)  , intent(out):: cd(size(r))
 integer(int64)             :: cd_c(size(r))
 integer(int64), allocatable:: cd_p(:,:)
 integer                    :: L, L_2, i, j, k, datasize, rsize
-real(real32)               :: dist
+real(real32)               :: dist, temp
 
 cd_c = 0
 
@@ -82,16 +82,16 @@ L_2 = L/2
 allocate(cd_p(rsize,L))
 cd_p = 0
 
-!$OMP PARALLEL DO PRIVATE(dist) schedule(guided)
+!$OMP PARALLEL DO PRIVATE(dist, temp) schedule(guided)
 do i=L,1,-1
   do j=i+1,L
     dist = 0
     do k=1,dims
-      dist = dist + ( data(i+k) - data(j+k) )**2
+      temp = data(i+k) - data(j+k)
+      dist = dist + temp**2
     enddo
     do k=1,rsize
-      dist = dist**0.5
-      if (r(k) > dist) then
+      if (r(k) > dist**0.5) then
         cd_p(k,i) = cd_p(k,i) + 1
       endif
     enddo
