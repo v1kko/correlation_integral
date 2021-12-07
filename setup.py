@@ -27,7 +27,7 @@ ext1 = Extension(name = 'correlation_integral',
     )
 
 if __name__ == "__main__":
-  with open("README.md", "r", encoding="utf-8") as fh:
+  with open("README.rst", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
   #Windows numpy distutils ignores every linker flag, so we force it

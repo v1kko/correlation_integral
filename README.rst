@@ -11,6 +11,7 @@ Usage
 -----
 
 To import the library run:
+
 .. code-block:: python
 
   import correlation_integral as ci
