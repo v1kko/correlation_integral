@@ -35,7 +35,7 @@ if __name__ == "__main__":
     env['LDFLAGS']        = "-Xlinker --start-group -lgomp"
 
   setup(name              = "correlation_integral",
-        version           = "0.0.4",
+        version           = "0.0.5",
         url               = "https://github.com/v1kko/correlation_integral",
         description       = "Correlation Integral caluclations done fast with openmp",
         long_description  = long_description,
