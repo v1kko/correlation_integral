@@ -69,7 +69,7 @@ int main(void) {
          threadsPerBlock);
   ci_manhattan<<<blocksPerGrid, threadsPerBlock,max((int)sizeof(int),(int)8)>>>(d_data, 0.5, 10000-5, 5,5);
   checkCudaErrors(cudaGetLastError());
-
+  checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaMemcpyFromSymbol(cd_p_h,cd_p,blocksPerGrid*sizeof(int)));
 
   for (int i = 0 ; i < blocksPerGrid ; i++) {
