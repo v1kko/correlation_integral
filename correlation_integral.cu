@@ -3,9 +3,7 @@
 #include <helper_cuda.h>
 #include <iostream>
 
-__device__ int* cd_p;
-
-__global__ void ci_manhattan (const float *data, const float r, int data_len, int r_len, int dims) {
+__global__ void ci_manhattan (const float *data, int *cd, const float r, int data_len, int r_len, int dims) {
   int x = blockDim.x * blockIdx.x + threadIdx.x;
   int y = blockDim.y * blockIdx.y + threadIdx.y;
   int b = blockIdx.x + blockIdx.y * blockDim.x;
@@ -29,7 +27,7 @@ __global__ void ci_manhattan (const float *data, const float r, int data_len, in
     }
   }
   if (i == 0) {
-    cd_p[b] = cd_reduction[0];
+    cd[b] = cd_reduction[0];
   }
 }
 
@@ -39,7 +37,8 @@ int main(void) {
   float b=0.3;
   float *x, *y;
   float *d_data;
-  int * cd_p_h;
+  int * d_cd;
+  int * cd;
 
   x = (float*)malloc(15000*sizeof(float));
   y = (float*)malloc(15000*sizeof(float));
@@ -62,17 +61,16 @@ int main(void) {
   int threadsPerBlock = 256;
   int blocksPerGrid = (10000 + threadsPerBlock - 1) / threadsPerBlock;
 
-  checkCudaErrors(cudaMallocHost((void **)&cd_p, blocksPerGrid*sizeof(int)));
-  cd_p_h =  (int *)malloc(blocksPerGrid*sizeof(int));
+  checkCudaErrors(cudaMallocHost((void **)&d_cd, blocksPerGrid*sizeof(int)));
+  cd  =  (int *)malloc(blocksPerGrid*sizeof(int));
 
   printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid,
          threadsPerBlock);
-  ci_manhattan<<<blocksPerGrid, threadsPerBlock,max((int)sizeof(int),(int)8)>>>(d_data, 0.5, 10000-5, 5,5);
-  checkCudaErrors(cudaGetLastError());
+  ci_manhattan<<<blocksPerGrid, threadsPerBlock,threadsPerBlock*sizeof(int)>>>(d_data, d_cd, 0.5, 10000-5, 5,5);
   checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaMemcpyFromSymbol(cd_p_h,cd_p,blocksPerGrid*sizeof(int)));
+  checkCudaErrors(cudaMemcpy(cd,d_cd,blocksPerGrid*sizeof(int),cudaMemcpyDeviceToHost));
 
   for (int i = 0 ; i < blocksPerGrid ; i++) {
-    std::cout << cd_p_h[i] << " ";
+    std::cout << cd[i] << " ";
   }
 }
