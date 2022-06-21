@@ -23,13 +23,16 @@ nrsteps=10;
 dims=np.arange(1,16) # calculate for d=1 uptil d=16
 nrdims=dims.size;
 rs=np.logspace(-2.5,0.5,nrsteps)
+print(rs)
 Cds=np.zeros((nrsteps,nrdims));
 
 print("Start")
 for j in range(nrdims):
-  Cds[:,j] = ci.chebyshev(x,dims[j],rs)
+  Cds[:,j] = ci.manhattan(x,dims[j],rs)
   print("x",end="")
 print("\nDONE!")
+
+print(dims[4],Cds[:,4])
 
 # Plot the results
 for i in range(len(dims)):
