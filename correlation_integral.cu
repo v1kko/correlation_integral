@@ -4,13 +4,14 @@
 #include <iostream>
 
 __global__ void ci_manhattan (const float *data, unsigned int *cd, const float r, unsigned int data_len, unsigned int dims) {
-  unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
+  if (blockIdx.x > blockIdx.y) { return; }
   unsigned int y = blockDim.y * blockIdx.y + threadIdx.y;
-  unsigned int b = blockIdx.x + blockIdx.y * blockDim.x;
+  unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
+  unsigned int b = blockIdx.x + blockIdx.y * gridDim.x;
   unsigned int i = threadIdx.x + threadIdx.y * blockDim.x;
   unsigned int t = blockDim.x*blockDim.y;
+  extern __shared__ unsigned int cd_reduction[];
   float dist = 0.f;
-  extern __shared__ int cd_reduction[];
   cd_reduction[i] = 0;
   if (x < data_len && y < data_len && y > x) {
     for (unsigned int j = 1; j <= dims ; j++) {
@@ -61,17 +62,20 @@ int main(void) {
   checkCudaErrors(cudaMemcpy(d_data,x,size*sizeof(float),cudaMemcpyHostToDevice));
 
   dim3 threadsPerBlock(16,16);
+  unsigned int nThreads = threadsPerBlock.x*threadsPerBlock.y;
   dim3 numBlocks(((size-1) / threadsPerBlock.x)+1, ((size-1) / threadsPerBlock.y)+1);
   unsigned int blocksPerGrid = numBlocks.x * numBlocks.y;
 
   checkCudaErrors(cudaMallocHost((void **)&d_cd, blocksPerGrid*sizeof(unsigned int)));
-  cd  =  (unsigned int *)malloc(blocksPerGrid*sizeof(unsigned int));
+  cd  =  (unsigned int *)calloc(blocksPerGrid,sizeof(unsigned int));
+  cd[0] =0;
+  checkCudaErrors(cudaMemcpy(d_cd,cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyHostToDevice));
 
   printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid,
          threadsPerBlock.x*threadsPerBlock.y);
   float r = pow(10.,0.5);
   std::cout << r << std::endl;
-  ci_manhattan<<<numBlocks, threadsPerBlock,256*sizeof(unsigned int)>>>(d_data, d_cd, r, size-5 ,5);
+  ci_manhattan<<<numBlocks, threadsPerBlock,nThreads*sizeof(unsigned int)>>>(d_data, d_cd, r, size-5 ,5);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaMemcpy(cd,d_cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyDeviceToHost));
 
@@ -79,7 +83,7 @@ int main(void) {
   for (unsigned int i = 0 ; i < blocksPerGrid ; i++) {
     all = all + cd[i];
   }
-	
+  std::cout << all << std::endl;	
   std::cout << all /((size - 5. ) * (size - 5. -1.) / 2.) << std::endl;
   
 }
