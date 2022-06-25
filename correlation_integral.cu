@@ -10,21 +10,24 @@ __global__ void ci_manhattan (const float *data, unsigned int *cd, const float r
 
   unsigned int cd_local = 0;
   float data_x[DIMS];
+  float data_y[DIMS];
   #pragma unroll
   for (unsigned int i = 0; i < DIMS; i++) {
     data_x[i] = data[x+i];
   }
-  for (unsigned int y = blockDim.x*blockIdx.x + 1; y < data_len; y++) {
-    const float *data_y = &data[y];
+  for (unsigned int y = x + 1; y < data_len; y++) {
+    #pragma unroll
+    for (unsigned int i = 0; i < DIMS; i++) {
+      data_y[i] = data[y+i];
+    }
     float dist = 0.f;
     #pragma unroll
-    for (unsigned int j = 0; j < DIMS; j++) {
-      dist = dist + fabsf(data_x[j] - data_y[j]);
+    for (unsigned int i = 0; i < DIMS; i++) {
+      dist = dist + fabsf(data_x[i] - data_y[i]);
     }
-    if (y > x) {
-      if (r > dist) {
-        cd_local += 1;
-      }
+
+    if (r > dist) {
+      cd_local += 1;
     }
   }
 
