@@ -3,14 +3,11 @@
 #include <helper_cuda.h>
 #include <iostream>
 
-#define DIMS 15
+#define DIMS 5
 __global__ void ci_manhattan (const float *data, unsigned int *cd, const float r, const unsigned int data_len) {
 
-  unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
-  unsigned int i = threadIdx.x + threadIdx.y * blockDim.x;
+  const unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
 
-  extern __shared__ unsigned int cd_reduction[];
-  cd_reduction[i] = 0;
   unsigned int cd_local = 0;
   float data_x[DIMS];
   #pragma unroll
@@ -68,15 +65,15 @@ int main(void) {
 
 
 
-  checkCudaErrors(cudaMallocHost((void **)&d_cd,(data_len-1)*sizeof(unsigned int)));
-  cd  =  (unsigned int *)malloc((data_len-1)*sizeof(unsigned int));
+  checkCudaErrors(cudaMallocHost((void **)&d_cd,(nThreads*blocksPerGrid)*sizeof(unsigned int)));
+  cd  =  (unsigned int *)malloc(nThreads*blocksPerGrid*sizeof(unsigned int));
   float r = pow(10.,0.5);
   std::cout << r << " " << DIMS << std::endl;
 
-  ci_manhattan<<<numBlocks, threadsPerBlock,nThreads*sizeof(unsigned int)>>>(d_data, d_cd, r, data_len);
+  ci_manhattan<<<numBlocks, threadsPerBlock>>>(d_data, d_cd, r, data_len);
 
   checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaMemcpy(cd,d_cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(cd,d_cd,nThreads*blocksPerGrid*sizeof(unsigned int),cudaMemcpyDeviceToHost));
 
   unsigned int all = 0;
   for (unsigned int i = 0 ; i < data_len-1 ; i++) {
