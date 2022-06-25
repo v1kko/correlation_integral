@@ -7,38 +7,21 @@
 
 __global__ void ci_manhattan (const float *data, unsigned int *cd, const float r, unsigned int data_len, unsigned int dims) {
   if (blockIdx.x > blockIdx.y) { return; }
-  unsigned int y = blockDim.y * blockIdx.y + threadIdx.y;
+
   unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
+  unsigned int y = blockDim.y * blockIdx.y + threadIdx.y;
   unsigned int b = blockIdx.x + blockIdx.y * gridDim.x;
   unsigned int i = threadIdx.x + threadIdx.y * blockDim.x;
   unsigned int t = blockDim.x*blockDim.y;
 
-  extern __shared__ char shared[];
+  extern __shared__ unsigned int cd_reduction[];
 
-  unsigned int * cd_reduction = (unsigned int *) shared;
-  float * data_x              = (float*) &shared[t*sizeof(unsigned int)];
-  float * data_y              = (float*) &shared[t*sizeof(unsigned int)+(blockDim.x+dims)*sizeof(float)];
   cd_reduction[i] = 0;
-
-  //Index is shifted by one! 
-  if (i < blockDim.x + dims) {
-    if ( blockDim.x*blockIdx.x+i+1 < data_len+dims ) {
-      data_x[i] = data[blockDim.x*blockIdx.x+i+1];
-    }
-  }
-  __syncthreads();
-  if (i < blockDim.x + dims) {
-    if ( blockDim.y*blockIdx.y+i+1 < data_len+dims ) {
-      data_y[i] = data[blockDim.y*blockIdx.y+i+1];
-    }
-  }
-  __syncthreads();
 
   if (x < data_len && y < data_len && y > x) {
     float dist = 0.f;
-    //j == 0 is next neighbour because data_x/y array shifted by one
     for (unsigned int j = 0; j < dims ; j++) {
-      dist = dist + fabsf(data_x[threadIdx.x+j] - data_y[threadIdx.y+j]);
+      dist = dist + fabsf(data[x+j] - data[y+j]);
     }
     if (r > dist) {
       cd_reduction[i] = 1;
@@ -56,6 +39,37 @@ __global__ void ci_manhattan (const float *data, unsigned int *cd, const float r
   }
 }
 
+__global__ void ci_manhattan_flat (const float *data, unsigned int *cd, const float r, unsigned int data_len, unsigned int dims) {
+
+  unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
+  unsigned int b = blockIdx.x + blockIdx.y * gridDim.x;
+  unsigned int i = threadIdx.x + threadIdx.y * blockDim.x;
+  unsigned int t = blockDim.x*blockDim.y;
+
+  extern __shared__ unsigned int cd_reduction[];
+  cd_reduction[i] = 0;
+
+  for (unsigned int y = x+1; y < data_len; y++) {
+    float dist = 0.f;
+    for (unsigned int j = 0; j < dims ; j++) {
+      dist = dist + fabsf(data[x+j] - data[y+j]);
+    }
+    if (r > dist) {
+      cd_reduction[i] += 1;
+    }
+  }
+
+  __syncthreads();
+  for (unsigned int s = t/2; s > 0; s >>= 1) {
+    if (i < s) {
+      cd_reduction[i] += cd_reduction[i + s];
+    }
+    __syncthreads();
+  }
+  if (i == 0) {
+    cd[b] = cd_reduction[0];
+  }
+}
 
 int main(void) {
   unsigned int dim = 5;
@@ -99,11 +113,29 @@ int main(void) {
          threadsPerBlock.x*threadsPerBlock.y);
   float r = pow(10.,0.5);
   std::cout << r << " " << dim << std::endl;
-  ci_manhattan<<<numBlocks, threadsPerBlock,nThreads*sizeof(unsigned int)+(threadsPerBlock.x+dim)*2*sizeof(float)>>>(d_data, d_cd, r, size-dim ,dim);
+
+  ci_manhattan<<<numBlocks, threadsPerBlock,nThreads*sizeof(unsigned int)>>>(d_data, d_cd, r, size-dim ,dim);
+
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaMemcpy(cd,d_cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyDeviceToHost));
 
   unsigned int all = 0;
+  for (unsigned int i = 0 ; i < blocksPerGrid ; i++) {
+    all = all + cd[i];
+  }
+  std::cout << all << std::endl;	
+  std::cout << all /((size - dim ) * (size - dim -1.) / 2.) << std::endl;
+
+  dim3 threadsPerBlock_flat(1024);
+  unsigned int nThreads_flat = threadsPerBlock.x;
+  dim3 numBlocks_flat(((size-1) / threadsPerBlock_flat.x)+1);
+
+  ci_manhattan_flat<<<numBlocks_flat, threadsPerBlock_flat,nThreads_flat*sizeof(unsigned int)>>>(d_data, d_cd, r, size-dim ,dim);
+
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaMemcpy(cd,d_cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyDeviceToHost));
+
+  all = 0;
   for (unsigned int i = 0 ; i < blocksPerGrid ; i++) {
     all = all + cd[i];
   }
