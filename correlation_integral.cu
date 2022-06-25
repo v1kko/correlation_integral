@@ -3,21 +3,25 @@
 #include <helper_cuda.h>
 #include <iostream>
 
-__global__ void ci_manhattan (const float *data, unsigned int *cd, const float r, const unsigned int data_len, const unsigned int dims) {
+#define DIMS 15
+__global__ void ci_manhattan (const float *data, unsigned int *cd, const float r, const unsigned int data_len) {
 
   unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
-  unsigned int b = blockIdx.x + blockIdx.y * gridDim.x;
   unsigned int i = threadIdx.x + threadIdx.y * blockDim.x;
-  unsigned int t = blockDim.x*blockDim.y;
 
   extern __shared__ unsigned int cd_reduction[];
   cd_reduction[i] = 0;
   unsigned int cd_local = 0;
-  const float *data_x = &data[x];
+  float data_x[DIMS];
+  #pragma unroll
+  for (unsigned int i = 0; i < DIMS; i++) {
+    data_x[i] = data[x+i];
+  }
   for (unsigned int y = blockDim.x*blockIdx.x + 1; y < data_len; y++) {
     const float *data_y = &data[y];
     float dist = 0.f;
-    for (unsigned int j = 0; j < dims; j++) {
+    #pragma unroll
+    for (unsigned int j = 0; j < DIMS; j++) {
       dist = dist + fabsf(data_x[j] - data_y[j]);
     }
     if (y > x) {
@@ -27,21 +31,10 @@ __global__ void ci_manhattan (const float *data, unsigned int *cd, const float r
     }
   }
 
-  cd_reduction[i] = cd_local;
-  __syncthreads();
-  for (unsigned int s = t/2; s > 0; s >>= 1) {
-    if (i < s) {
-      cd_reduction[i] += cd_reduction[i + s];
-    }
-    __syncthreads();
-  }
-  if (i == 0) {
-    cd[b] = cd_reduction[0];
-  }
+  cd[x] = cd_local;
 }
 
 int main(void) {
-  unsigned int dim = 5;
   float a=1.4;
   float b=0.3;
   float *x, *y;
@@ -49,6 +42,7 @@ int main(void) {
   unsigned int * d_cd;
   unsigned int * cd;
   unsigned int size = 100000;
+  unsigned int data_len = size - DIMS;
 
   x = (float*)malloc((size +5000)*sizeof(float));
   y = (float*)malloc((size +5000)*sizeof(float));
@@ -69,28 +63,26 @@ int main(void) {
   dim3 numBlocks(((size-1) / threadsPerBlock.x)+1);
   unsigned int blocksPerGrid = numBlocks.x;
 
-  checkCudaErrors(cudaMallocHost((void **)&d_data, (nThreads*blocksPerGrid+dim)*sizeof(float)));
+  checkCudaErrors(cudaMallocHost((void **)&d_data, (nThreads*blocksPerGrid+DIMS)*sizeof(float)));
   checkCudaErrors(cudaMemcpy(d_data,x,size*sizeof(float),cudaMemcpyHostToDevice));
 
 
 
-  checkCudaErrors(cudaMallocHost((void **)&d_cd, blocksPerGrid*sizeof(unsigned int)));
-  cd  =  (unsigned int *)calloc(blocksPerGrid,sizeof(unsigned int));
-  cd[0] =0;
-  checkCudaErrors(cudaMemcpy(d_cd,cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMallocHost((void **)&d_cd,(data_len-1)*sizeof(unsigned int)));
+  cd  =  (unsigned int *)malloc((data_len-1)*sizeof(unsigned int));
   float r = pow(10.,0.5);
-  std::cout << r << " " << dim << std::endl;
+  std::cout << r << " " << DIMS << std::endl;
 
-  ci_manhattan<<<numBlocks, threadsPerBlock,nThreads*sizeof(unsigned int)>>>(d_data, d_cd, r, size-dim ,dim);
+  ci_manhattan<<<numBlocks, threadsPerBlock,nThreads*sizeof(unsigned int)>>>(d_data, d_cd, r, data_len);
 
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaMemcpy(cd,d_cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyDeviceToHost));
 
   unsigned int all = 0;
-  for (unsigned int i = 0 ; i < blocksPerGrid ; i++) {
+  for (unsigned int i = 0 ; i < data_len-1 ; i++) {
     all = all + cd[i];
   }
   std::cout << all << std::endl;	
-  std::cout << all /((size - dim ) * (size - dim -1.) / 2.) << std::endl;
+  std::cout << all /((data_len ) * (data_len -1.) / 2.) << std::endl;
   
 }
