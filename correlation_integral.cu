@@ -3,43 +3,7 @@
 #include <helper_cuda.h>
 #include <iostream>
 
-
-
-__global__ void ci_manhattan (const float *data, unsigned int *cd, const float r, unsigned int data_len, unsigned int dims) {
-  if (blockIdx.x > blockIdx.y) { return; }
-
-  unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
-  unsigned int y = blockDim.y * blockIdx.y + threadIdx.y;
-  unsigned int b = blockIdx.x + blockIdx.y * gridDim.x;
-  unsigned int i = threadIdx.x + threadIdx.y * blockDim.x;
-  unsigned int t = blockDim.x*blockDim.y;
-
-  extern __shared__ unsigned int cd_reduction[];
-
-  cd_reduction[i] = 0;
-
-  if (x < data_len && y < data_len && y > x) {
-    float dist = 0.f;
-    for (unsigned int j = 0; j < dims ; j++) {
-      dist = dist + fabsf(data[x+j] - data[y+j]);
-    }
-    if (r > dist) {
-      cd_reduction[i] = 1;
-    }
-  }  
-   __syncthreads();
-  for (unsigned int s = t/2; s > 0; s >>= 1) {
-    if (i < s) {
-      cd_reduction[i] += cd_reduction[i + s];
-    }
-    __syncthreads();
-  }
-  if (i == 0) {
-    cd[b] = cd_reduction[0];
-  }
-}
-
-__global__ void ci_manhattan_flat (const float *data, unsigned int *cd, const float r, unsigned int data_len, unsigned int dims) {
+__global__ void ci_manhattan (const float *data, unsigned int *cd, const float r, const unsigned int data_len, const unsigned int dims) {
 
   unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
   unsigned int b = blockIdx.x + blockIdx.y * gridDim.x;
@@ -48,17 +12,22 @@ __global__ void ci_manhattan_flat (const float *data, unsigned int *cd, const fl
 
   extern __shared__ unsigned int cd_reduction[];
   cd_reduction[i] = 0;
-
-  for (unsigned int y = x+1; y < data_len; y++) {
+  unsigned int cd_local = 0;
+  const float *data_x = &data[x];
+  for (unsigned int y = blockDim.x*blockIdx.x + 1; y < data_len; y++) {
+    const float *data_y = &data[y];
     float dist = 0.f;
-    for (unsigned int j = 0; j < dims ; j++) {
-      dist = dist + fabsf(data[x+j] - data[y+j]);
+    for (unsigned int j = 0; j < dims; j++) {
+      dist = dist + fabsf(data_x[j] - data_y[j]);
     }
-    if (r > dist) {
-      cd_reduction[i] += 1;
+    if (y > x) {
+      if (r > dist) {
+        cd_local += 1;
+      }
     }
   }
 
+  cd_reduction[i] = cd_local;
   __syncthreads();
   for (unsigned int s = t/2; s > 0; s >>= 1) {
     if (i < s) {
@@ -95,22 +64,20 @@ int main(void) {
   y=&y[5000];
 
 
-  checkCudaErrors(cudaMallocHost((void **)&d_data, size*sizeof(float)));
+  dim3 threadsPerBlock(1024);
+  unsigned int nThreads = threadsPerBlock.x;
+  dim3 numBlocks(((size-1) / threadsPerBlock.x)+1);
+  unsigned int blocksPerGrid = numBlocks.x;
 
+  checkCudaErrors(cudaMallocHost((void **)&d_data, (nThreads*blocksPerGrid+dim)*sizeof(float)));
   checkCudaErrors(cudaMemcpy(d_data,x,size*sizeof(float),cudaMemcpyHostToDevice));
 
-  dim3 threadsPerBlock(32,32);
-  unsigned int nThreads = threadsPerBlock.x*threadsPerBlock.y;
-  dim3 numBlocks(((size-1) / threadsPerBlock.x)+1, ((size-1) / threadsPerBlock.y)+1);
-  unsigned int blocksPerGrid = numBlocks.x * numBlocks.y;
+
 
   checkCudaErrors(cudaMallocHost((void **)&d_cd, blocksPerGrid*sizeof(unsigned int)));
   cd  =  (unsigned int *)calloc(blocksPerGrid,sizeof(unsigned int));
   cd[0] =0;
   checkCudaErrors(cudaMemcpy(d_cd,cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyHostToDevice));
-
-  printf("CUDA kernel launch with %u blocks of %d threads\n", blocksPerGrid,
-         threadsPerBlock.x*threadsPerBlock.y);
   float r = pow(10.,0.5);
   std::cout << r << " " << dim << std::endl;
 
@@ -120,22 +87,6 @@ int main(void) {
   checkCudaErrors(cudaMemcpy(cd,d_cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyDeviceToHost));
 
   unsigned int all = 0;
-  for (unsigned int i = 0 ; i < blocksPerGrid ; i++) {
-    all = all + cd[i];
-  }
-  std::cout << all << std::endl;	
-  std::cout << all /((size - dim ) * (size - dim -1.) / 2.) << std::endl;
-
-  dim3 threadsPerBlock_flat(1024);
-  unsigned int nThreads_flat = threadsPerBlock.x;
-  dim3 numBlocks_flat(((size-1) / threadsPerBlock_flat.x)+1);
-
-  ci_manhattan_flat<<<numBlocks_flat, threadsPerBlock_flat,nThreads_flat*sizeof(unsigned int)>>>(d_data, d_cd, r, size-dim ,dim);
-
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaMemcpy(cd,d_cd,blocksPerGrid*sizeof(unsigned int),cudaMemcpyDeviceToHost));
-
-  all = 0;
   for (unsigned int i = 0 ; i < blocksPerGrid ; i++) {
     all = all + cd[i];
   }
